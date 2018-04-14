@@ -3,13 +3,16 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <algorithm>
 
 std::vector<std::vector<char>> extract_orderings(
 	const std::vector<std::string>::iterator start, 
 	const std::vector<std::string>::iterator end,
-	const std::string::size_type depth) 
+	const std::string::size_type depth,
+	const std::size_t& ALPHABETSIZE) 
 {
 	std::vector<char> order;
+	order.reserve(std::min(static_cast<std::size_t>(std::distance(start, end)), ALPHABETSIZE));
 	std::vector<std::vector<char>> orderings;
 	for (auto it = start; it != end; ++it) {
 		if (it->size() == depth) {
@@ -18,27 +21,57 @@ std::vector<std::vector<char>> extract_orderings(
 
 		order.push_back((*it)[depth]);
 
-		if (it != end - 1) {
+		if (order.size() == ALPHABETSIZE + 1) {
+			std::cout << "IMPOSSIBLE" << std::flush;
+			exit(0);
+		}
+
+		if (it + 1 != end && (*it)[depth] == (*(it + 1))[depth]) {
 			auto new_start = it;
 			auto new_end = it + 1;
-			while (new_end != end && new_end->size() > depth && (*new_start)[depth] == (*new_end)[depth]) {
+			while (new_end != end && (*new_start)[depth] == (*new_end)[depth]) {
 				++new_end;
 			}
 
-			if (new_end != it + 1) {
-				auto new_orderings = extract_orderings(new_start, new_end, depth + 1);
-				for (auto& o : new_orderings) {
-					if (o.size() > 1) {
-						orderings.push_back(o);
-					}
+			auto new_orderings = extract_orderings(new_start, new_end, depth + 1, ALPHABETSIZE);
+
+			for (auto& o : new_orderings) {
+				if (o.size() > 1) {
+					orderings.push_back(std::move(o));
 				}
-				it = new_end - 1;
 			}
+
+			it = new_end - 1;
 		}
 	}
 
-	orderings.push_back(order);
+	if (order.size() > 1) {
+		orderings.push_back(std::move(order));
+	}
+
 	return orderings;
+}
+
+std::unordered_map<char, std::unordered_set<char>>
+combine_orderings(std::vector<std::vector<char>>& orderings)
+{
+	std::unordered_map<char,  std::unordered_set<char>> combinations;
+	for (auto it = orderings.begin(); it != orderings.end(); ++it) {
+		for (auto itt = it->begin(); itt != it->end(); ++itt) {
+			combinations[*itt].insert(itt + 1, it->end());
+		}
+	}
+
+	for (auto& p : combinations) {
+		std::unordered_set<char> additional;
+		for (const auto& c : p.second) {
+			additional.insert(combinations[c].begin(), combinations[c].end());
+		}
+
+		p.second.insert(additional.begin(), additional.end());
+	}
+
+	return combinations;
 }
 
 int main()
@@ -58,52 +91,54 @@ int main()
 		std::getline(std::cin, w);
 	}
 
-	auto orderings = extract_orderings(words.begin(), words.end(), 0);
+	auto orderings = extract_orderings(words.begin(), words.end(), 0, ALPHABETSIZE);
 
-	std::unordered_map<char, std::pair<std::unordered_set<char>, std::unordered_set<char>>> alphabet;
-	for (auto it = orderings.begin(); it != orderings.end(); ++it) {
-		for (auto itt = it->begin(); itt != it->end(); ++itt) {
-			alphabet[*itt].first.insert(it->begin(), itt);
-			alphabet[*itt].second.insert(itt + 1, it->end());
+	/*for (const auto& o : orderings) {
+		for (const auto& c : o) {
+			std::cout << c;
+		}
+		std::cout << std::endl;
+	}*/
+
+	for (const auto& order : orderings) {
+		if (order.size() == ALPHABETSIZE) {
+			auto sorted_ordering = order;
+			std::sort(sorted_ordering.begin(), sorted_ordering.end());
+			if (sorted_ordering.end() != std::unique(sorted_ordering.begin(), sorted_ordering.end())) {
+				std::cout << "IMPOSSIBLE" << std::flush;
+				return 0;
+			}
+			else {
+				for (const auto& c : order) {
+					std::cout << c;
+				}
+				std::cout << std::flush;
+				return 0;
+			}
 		}
 	}
 
-	for (auto& p : alphabet) {
-		auto& pre_chars = p.second.first;
-		auto& post_chars = p.second.second;
+	auto combinations = combine_orderings(orderings);
 
-		std::unordered_set<char> pre_additional;
-		for (const auto& c : pre_chars) {
-			pre_additional.insert(alphabet[c].first.begin(), alphabet[c].first.end());
-		}
-
-		std::unordered_set<char> post_additional;
-		for (const auto& c : post_chars) {
-			post_additional.insert(alphabet[c].second.begin(), alphabet[c].second.end());
-		}
-
-		pre_chars.insert(pre_additional.begin(), pre_additional.end());
-		post_chars.insert(post_additional.begin(), post_additional.end());
-	}
-
-	std::vector<char> sorted_alphabet(ALPHABETSIZE);
-	for (const auto& p : alphabet) {
-		if (p.second.first.count(p.first) > 0 || p.second.second.count(p.first) > 0) {
-			std::cout << "IMPOSSIBLE" << std::endl;
-			return 0;
-		}
-		else if (p.second.first.size() + p.second.second.size() != ALPHABETSIZE - 1) {
-			std::cout << "AMBIGUOUS" << std::endl;
+	std::vector<char> alphabet(ALPHABETSIZE);
+	for (const auto& p : combinations) {
+		if (p.second.end() != std::find(p.second.begin(), p.second.end(), p.first)) {
+			std::cout << "IMPOSSIBLE" << std::flush;
 			return 0;
 		}
 
-		sorted_alphabet[p.second.first.size()] = p.first;
+		alphabet[ALPHABETSIZE - 1 - p.second.size()] = p.first;
 	}
 
-	for (const auto& c : sorted_alphabet) {
+	if (alphabet.end() != std::find(alphabet.begin(), alphabet.end(), 0)) {
+		std::cout << "AMBIGUOUS" << std::flush;
+		return 0;
+	}
+
+	for (const auto& c : alphabet) {
 		std::cout << c;
 	}
-	std::cout << std::endl;
+	std::cout << std::flush;
 
 	return 0;
 }
