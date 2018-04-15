@@ -93,13 +93,6 @@ int main()
 
 	auto orderings = extract_orderings(words.begin(), words.end(), 0, ALPHABETSIZE);
 
-	/*for (const auto& o : orderings) {
-		for (const auto& c : o) {
-			std::cout << c;
-		}
-		std::cout << std::endl;
-	}*/
-
 	for (const auto& order : orderings) {
 		if (order.size() == ALPHABETSIZE) {
 			auto sorted_ordering = order;
